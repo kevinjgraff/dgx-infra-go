@@ -1,0 +1,13 @@
+apiVersion: ops.example.com/v1
+kind: GPUHealthPolicy
+metadata:
+  name: default-policy
+  namespace: default
+spec:
+  metricURL: "http://pushgateway.observability.svc.cluster.local:9091/metrics"
+  threshold: 0
+  taintKey: "gpu-unhealthy"
+  labelSelector: "app=gpu-like-app"
+  cooldownSeconds: 30
+  dryRun: false
+
