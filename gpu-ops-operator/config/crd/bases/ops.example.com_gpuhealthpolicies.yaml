@@ -1,0 +1,76 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: gpuhealthpolicies.ops.example.com
+spec:
+  group: ops.example.com
+  names:
+    kind: GPUHealthPolicy
+    listKind: GPUHealthPolicyList
+    plural: gpuhealthpolicies
+    singular: gpuhealthpolicy
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: GPUHealthPolicy is the Schema for the gpuhealthpolicies API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of GPUHealthPolicy
+            properties:
+              cooldownSeconds:
+                type: integer
+              dryRun:
+                type: boolean
+              labelSelector:
+                type: string
+              metricURL:
+                type: string
+              taintKey:
+                type: string
+              threshold:
+                type: integer
+            required:
+            - metricURL
+            - taintKey
+            - threshold
+            type: object
+          status:
+            description: status defines the observed state of GPUHealthPolicy
+            properties:
+              lastRemediation:
+                format: date-time
+                type: string
+              unhealthyNodes:
+                items:
+                  type: string
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
