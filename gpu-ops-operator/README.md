@@ -1,135 +1,143 @@
 # gpu-ops-operator
-// TODO(user): Add simple overview of use/purpose
+
+The **GPU Ops Operator** is a Kubernetes controller designed to automatically monitor GPU health across nodes and apply remediation policies. It provides an automated feedback loop that reads GPU error metrics, identifies unhealthy nodes, taints them to prevent new workloads, and optionally evicts existing GPU workloads for recovery or maintenance.
 
 ## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+
+This operator simplifies GPU fleet management in Kubernetes clusters by continuously evaluating GPU health data (such as NVIDIA XID errors) from a metrics endpoint like Prometheus Pushgateway.  
+It uses custom resources (`GPUHealthPolicy`) to define how GPU nodes should be evaluated and remediated based on error thresholds, cooldown timers, and labels.  
+
+**Core capabilities:**
+- Scrapes GPU error metrics (e.g., `gpu_xid_errors_total`) from Pushgateway.
+- Dynamically taints unhealthy nodes with a configurable key (e.g., `gpu-unhealthy=true:NoSchedule`).
+- Clears taints when the node’s metrics return to normal.
+- Optionally evicts pods matching a label selector on unhealthy nodes.
+- Emits Kubernetes events and updates CR status for visibility.
+- Supports `dryRun` and `cooldownSeconds` for controlled operation.
+
+This enables proactive detection and isolation of failing GPUs in clusters—preventing job disruption and improving scheduling reliability.
 
 ## Getting Started
 
 ### Prerequisites
-- go version v1.24.0+
-- docker version 17.03+.
-- kubectl version v1.11.3+.
-- Access to a Kubernetes v1.11.3+ cluster.
+- Go **v1.24.0+**
+- Docker **17.03+**
+- kubectl **v1.11.3+**
+- A running Kubernetes **v1.11.3+** cluster
+- Optional: [Prometheus Pushgateway](https://github.com/prometheus/pushgateway) deployed in a namespace (default: `observability`)
 
-### To Deploy on the cluster
-**Build and push your image to the location specified by `IMG`:**
+### Deploy to Cluster
 
-```sh
-make docker-build docker-push IMG=<some-registry>/gpu-ops-operator:tag
+**1. Build and push the operator image:**
+```bash
+make docker-build docker-push IMG=ghcr.io/<your-username>/gpu-ops-operator:dev
 ```
 
-**NOTE:** This image ought to be published in the personal registry you specified.
-And it is required to have access to pull the image from the working environment.
-Make sure you have the proper permission to the registry if the above commands don’t work.
-
-**Install the CRDs into the cluster:**
-
-```sh
+**2. Install CRDs:**
+```bash
 make install
 ```
 
-**Deploy the Manager to the cluster with the image specified by `IMG`:**
-
-```sh
-make deploy IMG=<some-registry>/gpu-ops-operator:tag
+**3. Deploy the controller:**
+```bash
+make deploy IMG=ghcr.io/<your-username>/gpu-ops-operator:dev
 ```
 
-> **NOTE**: If you encounter RBAC errors, you may need to grant yourself cluster-admin
-privileges or be logged in as admin.
+> If you encounter RBAC errors, ensure you have cluster-admin privileges or are operating under an admin context.
 
-**Create instances of your solution**
-You can apply the samples (examples) from the config/sample:
+### Example Usage
 
-```sh
-kubectl apply -k config/samples/
+**Create a GPUHealthPolicy resource:**
+```yaml
+apiVersion: ops.example.com/v1
+kind: GPUHealthPolicy
+metadata:
+  name: default-policy
+  namespace: default
+spec:
+  metricURL: "http://pushgateway.observability.svc.cluster.local:9091/metrics"
+  threshold: 0
+  taintKey: "gpu-unhealthy"
+  cooldownSeconds: 30
+  dryRun: false
+  labelSelector: "app=gpu-workload"
 ```
 
->**NOTE**: Ensure that the samples has default values to test it out.
+Apply it:
+```bash
+kubectl apply -f config/samples/ops_v1_gpuhealthpolicy.yaml
+```
 
-### To Uninstall
-**Delete the instances (CRs) from the cluster:**
+Verify status and taints:
+```bash
+kubectl get gpuhealthpolicy default-policy -o yaml
+kubectl get nodes -o custom-columns=NAME:.metadata.name,TAINTS:.spec.taints
+```
 
-```sh
+Trigger a reconcile (for testing):
+```bash
+kubectl annotate gpuhealthpolicy default-policy "ops.example.com/reconcileAt=$(date +%s)" --overwrite
+```
+
+### Uninstall
+
+**Delete all GPUHealthPolicy instances:**
+```bash
 kubectl delete -k config/samples/
 ```
 
-**Delete the APIs(CRDs) from the cluster:**
-
-```sh
+**Remove CRDs:**
+```bash
 make uninstall
 ```
 
-**UnDeploy the controller from the cluster:**
-
-```sh
+**Remove the operator deployment:**
+```bash
 make undeploy
 ```
 
-## Project Distribution
+## Building Distributions
 
-Following the options to release and provide this solution to the users.
+### Single YAML Installer
 
-### By providing a bundle with all YAML files
-
-1. Build the installer for the image built and published in the registry:
-
-```sh
-make build-installer IMG=<some-registry>/gpu-ops-operator:tag
+Generate an all-in-one manifest:
+```bash
+make build-installer IMG=ghcr.io/<your-username>/gpu-ops-operator:dev
 ```
 
-**NOTE:** The makefile target mentioned above generates an 'install.yaml'
-file in the dist directory. This file contains all the resources built
-with Kustomize, which are necessary to install this project without its
-dependencies.
-
-2. Using the installer
-
-Users can just run 'kubectl apply -f <URL for YAML BUNDLE>' to install
-the project, i.e.:
-
-```sh
-kubectl apply -f https://raw.githubusercontent.com/<org>/gpu-ops-operator/<tag or branch>/dist/install.yaml
+Then install:
+```bash
+kubectl apply -f dist/install.yaml
 ```
 
-### By providing a Helm Chart
+### Helm Chart (optional)
 
-1. Build the chart using the optional helm plugin
-
-```sh
+Generate a Helm chart:
+```bash
 kubebuilder edit --plugins=helm/v1-alpha
 ```
 
-2. See that a chart was generated under 'dist/chart', and users
-can obtain this solution from there.
-
-**NOTE:** If you change the project, you need to update the Helm Chart
-using the same command above to sync the latest changes. Furthermore,
-if you create webhooks, you need to use the above command with
-the '--force' flag and manually ensure that any custom configuration
-previously added to 'dist/chart/values.yaml' or 'dist/chart/manager/manager.yaml'
-is manually re-applied afterwards.
+A chart will be available under `dist/chart/`, which can be deployed using Helm.
 
 ## Contributing
-// TODO(user): Add detailed information on how you would like others to contribute to this project
 
-**NOTE:** Run `make help` for more information on all potential `make` targets
+Contributions are welcome!  
+You can:
+1. Open issues for feature requests or bug reports.
+2. Fork and create pull requests for improvements.
+3. Use `make help` to discover supported build and deployment targets.
 
-More information can be found via the [Kubebuilder Documentation](https://book.kubebuilder.io/introduction.html)
+Ensure your changes pass `make test` and `go fmt ./...` before committing.
 
 ## License
 
-Copyright 2025 Kevin Graff.
+Copyright © 2025 **Kevin Graff**
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0.  
+You may obtain a copy of the License at:
 
-    http://www.apache.org/licenses/LICENSE-2.0
+```
+http://www.apache.org/licenses/LICENSE-2.0
+```
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-
+Unless required by applicable law or agreed to in writing, software distributed under this License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND.
